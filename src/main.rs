@@ -1,6 +1,8 @@
 use std::{
+    fs::read_dir,
     io::{BufRead, BufReader, Write},
     net::{TcpListener, TcpStream},
+    path::Path,
 };
 
 fn main() {
@@ -21,22 +23,28 @@ fn handle_connnection(mut stream: TcpStream) {
         .take_while(|line| !line.is_empty())
         .collect();
 
-    let url_path = http_request[0].split(' ').nth(1).unwrap();
-    let paths = std::fs::read_dir(format!(".{url_path}")).unwrap();
+    let url_path = format!(".{}", http_request[0].split(' ').nth(1).unwrap());
+    let path = Path::new(url_path.as_str());
 
-    let mut files_list = String::new();
+    let body = if path.is_dir() {
+        // TODO: Show all the files and subfolders
+        let mut files_list = String::new();
 
-    for path in paths {
-        let file_type = path.as_ref().unwrap().file_type().unwrap();
-        let file_name = path.unwrap().file_name();
-        let file = file_name.to_str().unwrap();
+        let paths = read_dir(path).unwrap();
+        for content in paths {
+            let file_name = content.unwrap().file_name();
+            let file = file_name.to_str().unwrap();
 
-        files_list = format!("{files_list}<li><a href=\"{file}\">{file}</a></li>");
-    }
+            files_list = format!("{files_list}<li><a href=\"{}/{file}\">{file}</a></li>", path.as_os_str().to_str().unwrap());
+        }
+
+        format!("<h1>File Server</h1><ul>{files_list}</ul>")
+    } else {
+        // TODO: Show the file
+        std::fs::read_to_string(path).unwrap()
+    };
 
     let status_line = "HTTP/1.1 200 OK";
-
-    let body = format!("<h1>File Server</h1><ul>{files_list}</ul>");
 
     let response = format!(
         "{status_line}
