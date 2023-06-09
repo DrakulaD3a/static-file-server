@@ -44,7 +44,7 @@ fn handle_connnection(mut stream: TcpStream) {
     );
     let path = Path::new(url_path.as_str());
 
-    let body = if path.is_dir() {
+    let response = if path.is_dir() {
         let mut files_list = String::new();
 
         let paths = match read_dir(path) {
@@ -64,46 +64,30 @@ fn handle_connnection(mut stream: TcpStream) {
             };
             let file = file_name.to_str().unwrap_or("");
 
+            let link_path = path.as_os_str().to_str().unwrap_or("").trim_start_matches('.').trim_start_matches('/');
+
             files_list = format!(
-                "{files_list}<li><a href=\"/{}/{file}\">{file}</a></li>",
+                "{files_list}<li><a href=\"/{}{}{file}\">{file}</a></li>",
                 path.as_os_str()
                     .to_str()
                     .unwrap_or("")
                     .trim_start_matches('.')
-                    .trim_start_matches('/')
+                    .trim_start_matches('/'),
+                if link_path.is_empty() { "" } else { "/" },
             );
         }
 
-        format!("<h1>File Server</h1><ul>{files_list}</ul>")
+        format!("HTTP/1.1 200 OK\r\n\r\n<!DOCTYPE html><html><head><title>File Server</title></head><body><h1>File Server</h1><ul>{files_list}</ul></body></html>")
     } else {
-        format!(
-            r#"<textarea style="width: 100%; height: 100%;">{}</textarea>"#,
-            match read_to_string(path) {
-                Ok(content) => content,
-                Err(e) => {
-                    let msg = format!("Failed to read file: {e}");
-                    eprintln!("{msg}");
-                    msg
-                }
+        match read_to_string(path) {
+            Ok(content) => content,
+            Err(e) => {
+                let msg = format!("Failed to read file: {e}");
+                eprintln!("{msg}");
+                msg
             }
-        )
+        }
     };
-
-    let status_line = "HTTP/1.1 200 OK";
-
-    let response = format!(
-        "{status_line}
-
-<!DOCTYPE html>
-<html>
-<head>
-    <title>File Server</title>
-</head>
-<body>
-    {body}
-</body>
-</html>"
-    );
 
     match stream.write_all(response.as_bytes()) {
         Ok(_) => {}
